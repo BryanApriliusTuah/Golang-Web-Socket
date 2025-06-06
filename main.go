@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -31,7 +32,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		conn.Close()
 	}()
 
-	fmt.Println("Client connected")
+	fmt.Println("Client connected from : ", conn.RemoteAddr().String())
 
 	for {
 		messageType, msg, err := conn.ReadMessage()
@@ -40,11 +41,29 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		fmt.Printf("Received message: %s\n", msg)
+		var incoming map[string]any
+		err = json.Unmarshal(msg, &incoming)
+		if err != nil {
+			fmt.Println("Invalid JSON format:", err)
+			continue
+		}
+
+		broadcastData := map[string]any{
+			"from":      conn.RemoteAddr().String(),
+			"elevation": incoming["elevation"],
+			"latitude":  incoming["latitude"],
+			"longitude": incoming["longitude"],
+		}
+
+		jsonMsg, err := json.Marshal(broadcastData)
+		if err != nil {
+			fmt.Println("Error marshaling JSON:", err)
+			continue
+		}
 
 		for client := range clients {
 			if client != conn {
-				err := client.WriteMessage(messageType, msg)
+				err := client.WriteMessage(messageType, jsonMsg)
 				if err != nil {
 					fmt.Println("Error broadcasting to client:", err)
 					client.Close()
@@ -53,6 +72,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
 }
 
 func main() {
