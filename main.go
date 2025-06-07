@@ -24,10 +24,9 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Error upgrading connection:", err)
 		return
 	}
-	// Add client to the map
+
 	clients[conn] = true
 	defer func() {
-		// Remove client from the map on disconnect
 		delete(clients, conn)
 		conn.Close()
 	}()
@@ -48,11 +47,36 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		var status_elevation string
+		elevation := int(incoming["elevation"].(float64))
+		if elevation > 100 {
+			status_elevation = "Normal"
+		} else if elevation < 80 {
+			status_elevation = "Banjir"
+		} else {
+			status_elevation = "Siaga"
+		}
+
+		var status_curah_hujan string
+		curah_hujan := int(incoming["curah_hujan"].(float64))
+		if curah_hujan >= 50 {
+			status_curah_hujan = "Hujan deras"
+		} else if curah_hujan >= 20 && curah_hujan < 50 {
+			status_curah_hujan = "Hujan sedang"
+		} else if curah_hujan > 0 && curah_hujan < 20 {
+			status_curah_hujan = "Hujan ringan"
+		} else {
+			status_curah_hujan = "Tidak ada hujan"
+		}
+
 		broadcastData := map[string]any{
-			"from":      conn.RemoteAddr().String(),
-			"elevation": incoming["elevation"],
-			"latitude":  incoming["latitude"],
-			"longitude": incoming["longitude"],
+			"from":               conn.RemoteAddr().String(),
+			"elevation":          incoming["elevation"],
+			"status_elevation":   status_elevation,
+			"curah_hujan":        incoming["curah_hujan"],
+			"status_curah_hujan": status_curah_hujan,
+			"latitude":           incoming["latitude"],
+			"longitude":          incoming["longitude"],
 		}
 
 		jsonMsg, err := json.Marshal(broadcastData)
