@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -71,6 +72,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 
 		broadcastData := map[string]any{
 			"from":               conn.RemoteAddr().String(),
+			"timestamp":          time.Now().Format(time.RFC1123),
 			"elevation":          incoming["elevation"],
 			"status_elevation":   status_elevation,
 			"curah_hujan":        incoming["curah_hujan"],
