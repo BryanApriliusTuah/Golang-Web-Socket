@@ -40,7 +40,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Client connected from : ", conn.RemoteAddr().String())
 
-	url := "http://localhost:3000/api/level"
+	url := "http://192.168.1.3:3000/api/level"
 
 	res, err := http.Get(url)
 
