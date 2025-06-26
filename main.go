@@ -134,8 +134,8 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/ws", handleConnection)
 
-	fmt.Println("Server started on :8080")
-	err := http.ListenAndServe(":8080", nil)
+	fmt.Println("Server started on :8001")
+	err := http.ListenAndServe(":8001", nil)
 	if err != nil {
 		fmt.Println("Error starting server:", err)
 	}
