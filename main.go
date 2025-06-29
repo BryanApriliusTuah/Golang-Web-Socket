@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -23,7 +24,31 @@ type Level struct {
 	Banjir int
 }
 
-var clients = make(map[*websocket.Conn]bool)
+var (
+	clients   = make(map[*websocket.Conn]bool)
+	clientsMu sync.Mutex // Protects the clients map
+)
+
+func broadcastConnectionCount() {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	count := len(clients)
+	data := map[string]any{
+		"connection_count": count,
+	}
+
+	msg, _ := json.Marshal(data)
+
+	for client := range clients {
+		err := client.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			fmt.Println("Error sending connection count:", err)
+			client.Close()
+			delete(clients, client)
+		}
+	}
+}
 
 func handleConnection(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -32,36 +57,46 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientsMu.Lock()
 	clients[conn] = true
+	clientsMu.Unlock()
+
+	fmt.Println("Client connected from :", conn.RemoteAddr().String())
+
+	// Notify all clients about the new connection count
+	broadcastConnectionCount()
+
 	defer func() {
+		clientsMu.Lock()
 		delete(clients, conn)
+		clientsMu.Unlock()
+
 		conn.Close()
+
+		fmt.Println("Client disconnected :", conn.RemoteAddr().String())
+
+		// Notify all clients about the updated connection count
+		broadcastConnectionCount()
 	}()
 
-	fmt.Println("Client connected from : ", conn.RemoteAddr().String())
-
 	url := "http://93.127.195.143:3000/api/level"
-
 	res, err := http.Get(url)
-
 	if err != nil {
-		fmt.Println("Error Fetching Level: ", err)
+		fmt.Println("Error Fetching Level:", err)
 		return
 	}
-
 	defer res.Body.Close()
 
 	body, err := io.ReadAll(res.Body)
-
 	if err != nil {
-		fmt.Println("Error Reading Body Request: ", err)
+		fmt.Println("Error Reading Body Request:", err)
 		return
 	}
 
 	var level Level
 	err = json.Unmarshal(body, &level)
 	if err != nil {
-		fmt.Println("Failed Decode Body: ", err)
+		fmt.Println("Failed Decode Body:", err)
 	}
 
 	for {
@@ -117,6 +152,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		clientsMu.Lock()
 		for client := range clients {
 			if client != conn {
 				err := client.WriteMessage(messageType, jsonMsg)
@@ -127,8 +163,8 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		clientsMu.Unlock()
 	}
-
 }
 
 func main() {
