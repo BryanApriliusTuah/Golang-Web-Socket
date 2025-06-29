@@ -1,0 +1,10 @@
+version: "3.9"
+
+services:
+  go:
+   build: 
+     context: .
+     dockerfile: dockerfile
+   container_name: go
+   ports:
+     - "8001:8001"
