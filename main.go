@@ -79,7 +79,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		broadcastConnectionCount()
 	}()
 
-	url := "http://93.127.195.143:3000/api/level"
+	url := "http://host.docker.internal:3000/api/level"
 	res, err := http.Get(url)
 	if err != nil {
 		fmt.Println("Error Fetching Level:", err)
