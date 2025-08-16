@@ -136,7 +136,7 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		broadcastData := map[string]any{
-			"from":               conn.RemoteAddr().String(),
+			"hardwareId":         incoming["hardwareId"],
 			"timestamp":          time.Now().Format(time.RFC1123),
 			"elevation":          incoming["elevation"],
 			"status_elevation":   status_elevation,
