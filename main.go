@@ -35,6 +35,7 @@ func broadcastConnectionCount() {
 
 	count := len(clients)
 	data := map[string]any{
+		"type":             "connection",
 		"connection_count": count,
 	}
 
@@ -46,6 +47,50 @@ func broadcastConnectionCount() {
 			fmt.Println("Error sending connection count:", err)
 			client.Close()
 			delete(clients, client)
+		}
+	}
+}
+
+func broadcastTimeReady(value any) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	data := map[string]any{
+		"type":      "time",
+		"timeReady": value,
+	}
+
+	msg, _ := json.Marshal(data)
+
+	for client := range clients {
+		err := client.WriteMessage(websocket.TextMessage, msg)
+		if err != nil {
+			fmt.Println("Error sending timeReady:", err)
+			client.Close()
+			delete(clients, client)
+		}
+	}
+}
+
+// broadcast sensor data
+func broadcastDataMessage(sender *websocket.Conn, messageType int, broadcastData map[string]any) {
+	jsonMsg, err := json.Marshal(broadcastData)
+	if err != nil {
+		fmt.Println("Error marshaling JSON:", err)
+		return
+	}
+
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	for client := range clients {
+		if client != sender {
+			err := client.WriteMessage(messageType, jsonMsg)
+			if err != nil {
+				fmt.Println("Error broadcasting to client:", err)
+				client.Close()
+				delete(clients, client)
+			}
 		}
 	}
 }
@@ -113,57 +158,52 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		var status_elevation string
-		elevation := int(incoming["elevation"].(float64))
-		if elevation > level.Normal {
-			status_elevation = "Normal"
-		} else if elevation < level.Banjir {
-			status_elevation = "Banjir"
-		} else {
-			status_elevation = "Siaga"
-		}
+		// switch by type
+		switch incoming["type"] {
+		case "time":
+			broadcastTimeReady(incoming["timeReady"])
 
-		var status_curah_hujan string
-		curah_hujan := int(incoming["curah_hujan"].(float64))
-		if curah_hujan >= 50 {
-			status_curah_hujan = "Hujan deras"
-		} else if curah_hujan >= 20 && curah_hujan < 50 {
-			status_curah_hujan = "Hujan sedang"
-		} else if curah_hujan > 0 && curah_hujan < 20 {
-			status_curah_hujan = "Hujan ringan"
-		} else {
-			status_curah_hujan = "Tidak ada hujan"
-		}
-
-		broadcastData := map[string]any{
-			"hardwareId":         incoming["hardwareId"],
-			"timestamp":          time.Now().Format(time.RFC1123),
-			"elevation":          incoming["elevation"],
-			"status_elevation":   status_elevation,
-			"curah_hujan":        incoming["curah_hujan"],
-			"status_curah_hujan": status_curah_hujan,
-			"latitude":           incoming["latitude"],
-			"longitude":          incoming["longitude"],
-		}
-
-		jsonMsg, err := json.Marshal(broadcastData)
-		if err != nil {
-			fmt.Println("Error marshaling JSON:", err)
-			continue
-		}
-
-		clientsMu.Lock()
-		for client := range clients {
-			if client != conn {
-				err := client.WriteMessage(messageType, jsonMsg)
-				if err != nil {
-					fmt.Println("Error broadcasting to client:", err)
-					client.Close()
-					delete(clients, client)
-				}
+		case "data":
+			// evaluate elevation
+			var status_elevation string
+			elevation := int(incoming["elevation"].(float64))
+			if elevation > level.Normal {
+				status_elevation = "Normal"
+			} else if elevation < level.Banjir {
+				status_elevation = "Banjir"
+			} else {
+				status_elevation = "Siaga"
 			}
+
+			// evaluate rainfall
+			var status_curah_hujan string
+			curah_hujan := int(incoming["curah_hujan"].(float64))
+			if curah_hujan >= 50 {
+				status_curah_hujan = "Hujan deras"
+			} else if curah_hujan >= 20 {
+				status_curah_hujan = "Hujan sedang"
+			} else if curah_hujan > 0 {
+				status_curah_hujan = "Hujan ringan"
+			} else {
+				status_curah_hujan = "Tidak ada hujan"
+			}
+
+			broadcastData := map[string]any{
+				"type":               "data",
+				"hardwareId":         incoming["hardwareId"],
+				"timestamp":          time.Now().Format(time.RFC1123),
+				"elevation":          incoming["elevation"],
+				"level_siaga":        incoming["level_siaga"],
+				"level_banjir":       incoming["level_banjir"],
+				"status_elevation":   status_elevation,
+				"curah_hujan":        incoming["curah_hujan"],
+				"status_curah_hujan": status_curah_hujan,
+				"latitude":           incoming["latitude"],
+				"longitude":          incoming["longitude"],
+			}
+
+			broadcastDataMessage(conn, messageType, broadcastData)
 		}
-		clientsMu.Unlock()
 	}
 }
 
