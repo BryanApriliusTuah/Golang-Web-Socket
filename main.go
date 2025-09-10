@@ -167,25 +167,27 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			// evaluate elevation
 			var status_elevation string
 			elevation := int(incoming["elevation"].(float64))
-			if elevation > level.Normal {
-				status_elevation = "Normal"
-			} else if elevation < level.Banjir {
+			if elevation < level.Banjir {
 				status_elevation = "Banjir"
-			} else {
+			} else if elevation < level.Normal && elevation >= level.Banjir {
 				status_elevation = "Siaga"
+			} else {
+				status_elevation = "Normal"
 			}
 
 			// evaluate rainfall
 			var status_curah_hujan string
 			curah_hujan := int(incoming["curah_hujan"].(float64))
-			if curah_hujan >= 50 {
+			if curah_hujan > 100 {
 				status_curah_hujan = "Hujan deras"
-			} else if curah_hujan >= 20 {
+			} else if curah_hujan >= 50 && curah_hujan <= 100 {
+				status_curah_hujan = "Hujan lebat"
+			} else if curah_hujan >= 20 && curah_hujan < 50 {
 				status_curah_hujan = "Hujan sedang"
-			} else if curah_hujan > 0 {
-				status_curah_hujan = "Hujan ringan"
+			} else if curah_hujan >= 5 && curah_hujan < 20 {
+				status_curah_hujan = "Gerimis"
 			} else {
-				status_curah_hujan = "Tidak ada hujan"
+				status_curah_hujan = "Cerah"
 			}
 
 			broadcastData := map[string]any{
